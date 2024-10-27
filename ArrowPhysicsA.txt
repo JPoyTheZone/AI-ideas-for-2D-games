@@ -1,0 +1,67 @@
+extends KinematicBody2D
+
+
+
+
+var time : float
+var valid_target : bool
+var facing_direction = Vector2.ZERO
+var distance_from_target : float
+export var Peak_Height : int
+
+var collided : bool = false
+
+export var time_it_takes_to_reach_target : float
+
+var max_distance
+
+onready var direction : int
+onready var initial_position : Vector2
+onready var target_position : Vector2
+onready var Peak1 : Vector2
+onready var Peak2 : Vector2
+
+func _ready():
+	pass
+	
+	
+
+var target_location: Vector2 
+var collide_time : float 
+func _process(delta):
+	pass
+	time += delta *3
+	var Peak : Vector2
+	
+	var arrow_speed = max_distance * time_it_takes_to_reach_target
+	
+	if collided or time >=1 :
+		
+		collide_time += delta
+		if collide_time > 3:
+			queue_free()
+	else:
+		global_position = cubic_bezier(initial_position,Peak1,Peak2,target_position,time)
+		set_rotation_degrees(lerp((-38*get_scale().x),(39*get_scale().x),time))
+
+var printonce : bool = true
+
+func cubic_bezier(A1 : Vector2, A2 : Vector2 , A3 : Vector2, A4 : Vector2 , time):
+	var B1 = lerp(A1, A2,time)
+	var B2 = lerp(A2, A3,time)
+	var B3 = lerp(A3, A4,time)
+	var C1 = lerp(B1, B2, time)
+	var C2 = lerp(B2, B3, time)
+	var current_position = lerp(C1,C2,time)
+	
+	
+	
+	return current_position
+
+
+
+
+
+func _on_Area2D_body_entered(body):
+	collided = true
+

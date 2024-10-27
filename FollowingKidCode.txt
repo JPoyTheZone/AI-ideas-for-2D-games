@@ -1,0 +1,258 @@
+extends KinematicBody2D
+
+
+#====================================================PLAYER DETECTION MODULE=============================================
+onready var player 
+#====================================================PLAYER DETECTION MODULE=============================================
+#====================================================JUMP MODULE=========================================================
+export var jump_height : float = 55
+export var jump_time_to_peak : float = 0.4
+export var jump_time_to_descend : float = 0.3
+
+onready var jump_velocity : float = ((((2.0 * jump_height))/jump_time_to_peak)* -1.0 )
+onready var jump_gravity : float = (((-2.0 * jump_height)/(jump_time_to_peak * jump_time_to_peak))* -1.0)
+onready var fall_gravity : float = (((-2.0 * jump_height)/(jump_time_to_descend * jump_time_to_descend))* -1.0)
+#====================================================JUMP MODULE=========================================================
+var acti_once : bool = true
+var speed : float
+export var follow_speed : float = 0.0
+export var original_speed : float = 0.0
+var velocity = Vector2.ZERO
+var gravity = 50
+var jump_once = true
+# Called when the node enters the scene tree for the first time.
+func _ready():
+	walk_duration = wait_for_set_seconds(4,7)
+	
+var state = "Idle"
+#we can only jump for a maximum of times a moment
+var jump_count : float= 1.0
+var jpm : float
+var jump_terval : float
+var jump_slo : float = 6.0
+var timer_ : float
+
+#============================================SUB MODULE- WAITING/WALKING===============================================================
+var walk_time_set : bool = false
+export var walk_duration : float
+var wait_time_set : bool = false
+export var wait_duration : float
+var direction_pick
+#============================================SUB MODULE- WAITING/WALKING===============================================================
+#===========================================TRACKING - MODULE==========================================================================
+var target_direction = 1
+onready var initial_area = $Area2D.get_scale().y
+var difference : float
+var tagging = "null"
+#===========================================TRACKING - MODULE==========================================================================
+func _physics_process(delta):
+	timer_ += delta
+	if timer_ > 60:
+		refresh()
+	
+	velocity.y += get_gravity() * delta
+	#============================================STATE MODULES===="res://Assets/Game Assets/Sounds/JumpSounnd.wav"===========================================================
+	
+	match state:
+		"Wander":
+			if walk_duration > 0:
+				walk_duration -= delta
+				#WALKING
+				#print(target_direction)
+				velocity.x = speed * target_direction
+			elif walk_duration <= 0 and !wait_time_set:
+				wait_duration = wait_for_set_seconds(1,2)
+				wait_time_set = true
+				walk_time_set = false
+			elif wait_duration > 0:
+				wait_duration -= delta
+				#STANDING
+				velocity.x = 0
+			elif wait_duration <=0 and !walk_time_set:
+				walk_duration = walk_for_set_seconds(2,3)
+				walk_time_set = true
+				wait_time_set = false
+				randm()
+			speed = original_speed
+			$AnimationPlayer.set_speed_scale(1.0)
+			$Label3.set("custom_colors/font_color","3d0843")
+		"Follow":
+			
+			walk_duration =0
+			wait_duration =0
+			if player != null:
+				if (difference) > 12: #Player on left
+					target_direction = 1
+					velocity.x = speed * target_direction
+				elif (difference) < -12: #Player on Right
+					target_direction = -1
+					velocity.x = speed * target_direction
+			speed = original_speed * follow_speed
+			$AnimationPlayer.set_speed_scale(follow_speed)
+			$Label3.set("custom_colors/font_color","c50eda")
+		"Idle":
+			speed = original_speed
+			$AnimationPlayer.set_speed_scale(1.0)
+			$Label3.set("custom_colors/font_color","3d0843")
+			velocity.x = 0
+	
+	#============================================STATE MODULES===============================================================
+	
+	
+	
+	
+	
+	velocity = move_and_slide(velocity, Vector2.UP)
+	
+	
+	
+	#======================================AREA_2D_ANCHORING_MODULE==========TRACKING_MODULE=====================================
+	if is_on_floor():
+		if $RightCast.is_colliding() and jump_once or $LeftCast.is_colliding() and jump_once :
+			#=================================JUMP BALANCER MODULE===============================================================
+			#Jump_interval increaser
+			if jump_count > jump_slo:
+				jpm = (jump_count/60.0)*3
+				jump_terval+=delta
+				if jump_terval > jpm:
+					jump()
+			else:
+				jump()
+				
+			jump_once = false
+			#=================================JUMP BALANCER MODULE===============================================================
+	$Label3.set_text(str(difference))
+	if player == null:
+		acti_once = true
+		$Label1.set_text(str(null))
+		$Area2D.set_scale(Vector2(3,3))
+		
+		$Area2D.set_position(Vector2(0,0))
+		
+		difference = 0
+		state = "Idle"
+		
+		
+	elif player != null:
+		
+		if acti_once:
+			state = "Wander"
+			acti_once = false
+		$Label1.set_text(str(state))
+		$Area2D.set_scale(Vector2(10,5))
+		difference = player.global_position.x - global_position.x
+		$Area2D.set_position(Vector2(0,    (-($Area2D.get_scale().y -initial_area)*30) +20    )) #Anchoring the area 2D to it's bottom offset + 20 so we can see a little lower as well
+		var Y_tracker = player.global_position.y - global_position.y
+		$Label2.set_text(str(Y_tracker))
+		if difference <= 0:
+			#print("left")
+			
+			if difference < -($Area2D.get_scale().x*30*(5.0/8.0)):
+				#print("beyond_limit")
+				state = "Follow"
+			elif difference > -($Area2D.get_scale().x*30*(1.0/8.0)):
+				if ((Y_tracker>-8)and(Y_tracker<8)):
+					state = "Wander"
+					jump_count =0
+					jpm=0
+				elif is_on_floor() and ((Y_tracker<-60)):
+					#=================================JUMP BALANCER MODULE=======================================================
+					#Jump_interval increaser
+					if jump_count > jump_slo:
+						jpm = (jump_count/60.0)*10
+						jump_terval+=delta
+						if jump_terval > jpm:
+							jump()
+							print("1")
+					else:
+						jump()
+						print("2")
+					jump_once = false
+					#=================================JUMP BALANCER MODULE=======================================================
+		elif difference > 0:
+			#print("right")
+			
+			if difference > ($Area2D.get_scale().x*30*(5.0/8.0)):
+				#print("beyond_accept")
+				state = "Follow"
+			elif (difference < ($Area2D.get_scale().x*30*(1.0/8.0))):
+				if ((Y_tracker>-8)and(Y_tracker<8)):
+					state = "Wander"
+					jump_count =0
+					jpm=0
+				elif is_on_floor() and ((Y_tracker<-60)):
+					#=================================JUMP BALANCER MODULE=======================================================
+					#Jump_interval increaser
+					if jump_count > jump_slo:
+						jpm = (jump_count/60.0)*10
+						jump_terval+=delta
+						if jump_terval > jpm:
+							jump()
+							print("3")
+					else:
+						jump()
+						print("4")
+					jump_once = false
+					#=================================JUMP BALANCER MODULE=======================================================
+	
+	#======================================AREA_2D_ANCHORING_MODULE==========TRACKING_MODULE=====================================
+	if is_zero_approx(velocity.x) and is_zero_approx(velocity.y):
+		$AnimationPlayer.set_current_animation("Idle")
+	elif is_zero_approx(velocity.y) and velocity.x != 0:
+		$AnimationPlayer.set_current_animation("Walk")
+	elif velocity.y < 0:
+		$AnimationPlayer.set_current_animation("Jump")
+	elif velocity.y > 0:
+		$AnimationPlayer.set_current_animation("Fall")
+	
+	if velocity.x < 0:
+		$Sprite.set_flip_h(true)
+	elif velocity.x > 0:
+		$Sprite.set_flip_h(false)
+	
+	if is_on_floor() and !jump_once:
+		jump_once = true
+		$Sound._set_playing(false)
+	
+	
+	
+	
+	
+	
+	
+	player = $Area2D.player
+
+#=================================================RANDOM_DIRECTION=======================================================
+func randm():
+	direction_pick = randi()% 2+1
+	if direction_pick == 1:
+		target_direction = 1
+	elif direction_pick ==2:
+		target_direction =-1
+
+#====================================================JUMP MODULE=========================================================
+func get_gravity() -> float:
+	return jump_gravity if velocity.y < 0.0 else fall_gravity
+
+
+func jump():
+	velocity.y = jump_velocity 
+	$Sound._set_playing(true)
+	jump_terval = 0
+	jump_count +=1.0
+#====================================================JUMP MODULE=========================================================
+#============================================SUB MODULE- WAITING/WALKING=================================================
+func wait_for_set_seconds(min_time, max_time):
+	return randi()%max_time +min_time
+func walk_for_set_seconds(min_time, max_time):
+	return randi()%max_time +min_time
+#============================================SUB MODULE- WAITING/WALKING===============================================================
+
+
+func _on_Sound_finished():
+	$Sound._set_playing(false)
+
+func refresh():
+	jump_count=0
+	jpm =0
+	timer_ =0

@@ -1,0 +1,216 @@
+extends KinematicBody2D
+
+export var WalkingSpeed : int = 100
+var DirectionRunning = 1
+var Arrow_Point : float = 1.0
+var velocity = Vector2.ZERO
+#====================================================JUMP MODULE=================================================================
+## in tiles
+export var jump_height : float = 55
+export var jump_time_to_peak : float = 0.4
+export var jump_time_to_descend : float = 0.3
+
+onready var jump_velocity : float = ((((2.0 * jump_height))/jump_time_to_peak)* -1.0 )
+onready var jump_gravity : float = (((-2.0 * jump_height)/(jump_time_to_peak * jump_time_to_peak))* -1.0)
+onready var fall_gravity : float = (((-2.0 * jump_height)/(jump_time_to_descend * jump_time_to_descend))* -1.0)
+
+#====================================================JUMP MODULE=================================================================
+
+var Friction
+
+# Called when the node enters the scene tree for the first time.
+func _ready():
+	pass # Replace with function body.
+	
+
+
+#==================================================WALL_GRAB MODULE==============================================================
+var wall_grab : bool = false
+var air_time = 0
+var invert_ = 1
+var wall_jumping : bool
+#==================================================WALL_GRAB MODULE==============================================================
+#====================================================AIM MODULE==================================================================
+var origin 
+var collision_point 
+var distance 
+
+export var DetectRange : float = 0.0
+
+var aimv = Vector2.ZERO
+var distance_calculator = Vector2(10,10)
+export var aimh : int
+var Rectangle_Size = Vector2.ZERO
+#====================================================AIM MODULE==================================================================
+func _physics_process(delta):
+	distance_calculator = $Aimer.get_collision_point() - position
+	if wall_jumping and !Attacking:
+		aimv.x = DetectRange * invert_
+	elif !Attacking :
+		aimv.x = DetectRange * Arrow_Point
+	$Aimer.set_cast_to(aimv)
+	#================================================AIM MODULE==================================================================
+	if is_on_wall():
+		wall_grab = true
+	else:
+		wall_grab = false
+	
+	DirectionRunning = (Input.get_action_strength("Player2_Right")) - (Input.get_action_strength("Player2_Left"))
+	if wall_jumping and !Attacking:
+		Arrow_Point = invert_
+		
+	elif DirectionRunning != 0 and !Attacking:
+		Arrow_Point = DirectionRunning
+	if Attacking:
+		$AnimationPlayer.set_current_animation("Attack"+str(Attack_number))
+		velocity.y = 0
+		velocity.x = 0
+		z_index = 10
+	
+	if velocity.x < 0:
+		$Sprite.set_flip_h(true)
+	elif velocity.x > 0:
+		$Sprite.set_flip_h(false)
+	
+	if is_on_floor():        #GroundState
+		wall_jumping = false
+		air_time = 0                    
+		if DirectionRunning == 0 and !Attacking:
+				$AnimationPlayer.set_current_animation("Idle")
+		elif DirectionRunning != 0 and !Attacking:
+				$AnimationPlayer.set_current_animation("Run")
+		if Input.is_action_just_pressed("Player2_Up"):
+			jump()
+		
+	elif !is_on_floor():                         #AirState
+		air_time += delta
+		
+		if DirectionRunning != 0 and raycast_active() and air_time > 0.28:
+			wall_jumping = false
+			$AnimationPlayer.set_current_animation("Wall_Jump")
+			Friction = 0.5
+			velocity.y = 0
+			if Input.is_action_just_pressed("Player2_Up"):
+				#===================================WALL_GRAB MODULE==============================================================
+				if !wall_jumping:
+					invert_ = DirectionRunning * -1
+				air_time = 0
+				wall_jumping = true
+				
+				jump()
+		else:
+			Friction = 1
+			if velocity.y < 0:
+				$AnimationPlayer.set_current_animation("Jump")
+				
+			elif velocity.y > 0:
+				$AnimationPlayer.set_current_animation("Fall")
+		#===========================================WALL_GRAB MODULE==============================================================
+		
+		
+		
+	if wall_jumping and !Attacking:
+		velocity.x = WalkingSpeed * invert_
+	elif !Attacking :
+		velocity.x = WalkingSpeed * DirectionRunning
+	
+	if !Attacking :
+		velocity.y += get_gravity() * Friction * delta
+	velocity = move_and_slide(velocity, Vector2.UP)
+	
+	if air_time > 0.5:
+		wall_jumping = false
+		
+	if $Aimer.is_colliding():
+		origin = $Aimer.global_transform.origin
+		collision_point = $Aimer.get_collision_point()
+		distance = abs(origin.distance_to(collision_point))
+	else:
+		
+		distance = abs($Aimer.get_cast_to().x)
+		
+	$Label.set_text(str(int((distance/250)*100))+" %")
+	$Label2.set_text("W")
+	
+	#===============================================AIM MODULE2==================================================================
+	
+	Rectangle_Size.x = distance
+	Rectangle_Size.y = 10
+	
+	$AimModule.position.x = (distance*0.30*Arrow_Point)
+	$AimModule2.position.x = (distance*0.80*Arrow_Point)
+	$AimModule.position.y = (distance/DetectRange)*aimh
+	$AimModule2.position.y = (distance/DetectRange)*aimh
+	#===============================================AIM MODULE2==================================================================
+
+
+#====================================================JUMP MODULE=================================================================
+func get_gravity() -> float:
+	return jump_gravity if velocity.y < 0.0 else fall_gravity
+
+
+func jump():
+	velocity.y = jump_velocity 
+	
+
+func raycast_active():
+	
+	return ($LeftCast.is_colliding() or $RightCast.is_colliding())
+
+#====================================================JUMP MODULE=================================================================
+
+
+#====================================================ATTACK MODULE===============================================================
+
+
+
+
+var Attacking = false
+var Attack_number = 1
+func _input(_event):
+	
+	if Attacking == false and !wall_grab:
+		if Input.is_action_pressed("Player2_Attack") and ( is_on_floor() or air_time > 0.08):
+			Attacking = true
+			if Attack_number <=1:
+				Attack_number =1
+			else:
+				Attack_number = 1
+	pass
+
+onready var Arrow = preload("res://Assets/Character Assets/Projectiles/Arrow2.tscn")
+export var Arrow_Rain : int
+var Arrow_number :int
+
+func attack():
+	for Arrow_number in Arrow_Rain:
+		
+		var Arrow_instance =  Arrow.instance()
+		get_tree().get_root().add_child(Arrow_instance)
+		Arrow_instance.global_position = global_position
+		Arrow_instance.scale.x = Arrow_Point
+		Arrow_instance.initial_position = global_position
+		Arrow_instance.Peak1 = $AimModule.global_position
+		Arrow_instance.Peak2 = $AimModule2.global_position
+		if $Aimer.is_colliding():
+			Arrow_instance.target_position = $Aimer.get_collision_point()
+		else:
+			Arrow_instance.target_position = Vector2(global_position.x+(DetectRange*Arrow_Point),global_position.y)
+		
+		
+		Arrow_instance.distance_from_target = distance
+		Arrow_instance.max_distance = DetectRange
+		
+		Arrow_instance.set_z_as_relative(-5)
+		
+
+
+
+
+
+#This is a signal from the AnimationPlayer
+func _on_AnimationPlayer_animation_finished(anim_name):
+	if anim_name == "Attack"+str(Attack_number):
+		Attacking = false
+		z_index = 0
+#====================================================ATTACK MODULE===============================================================

@@ -1,0 +1,157 @@
+extends KinematicBody2D
+
+export var WalkingSpeed : int = 100
+var DirectionRunning
+var velocity = Vector2.ZERO
+#====================================================JUMP MODULE=================================================================
+## in tiles
+export var jump_height : float = 55
+export var jump_time_to_peak : float = 0.4
+export var jump_time_to_descend : float = 0.3
+
+onready var jump_velocity : float = ((((2.0 * jump_height))/jump_time_to_peak)* -1.0 )
+onready var jump_gravity : float = (((-2.0 * jump_height)/(jump_time_to_peak * jump_time_to_peak))* -1.0)
+onready var fall_gravity : float = (((-2.0 * jump_height)/(jump_time_to_descend * jump_time_to_descend))* -1.0)
+
+#====================================================JUMP MODULE=================================================================
+
+var Friction
+
+# Called when the node enters the scene tree for the first time.
+func _ready():
+	pass # Replace with function body.
+
+
+#==================================================WALL_GRAB MODULE==============================================================
+var wall_grab : bool = false
+var air_time = 0
+var invert_ = 1
+var wall_jumping : bool
+#==================================================WALL_GRAB MODULE==============================================================
+
+
+
+#====================================================ATTACK MODULE===============================================================
+
+
+
+
+#====================================================ATTACK MODULE===============================================================
+
+func _physics_process(delta):
+	
+	if is_on_wall():
+		wall_grab = true
+	else:
+		wall_grab = false
+	
+	DirectionRunning = (Input.get_action_strength("Player1_Right")) - (Input.get_action_strength("Player1_Left"))
+	
+	if Attacking:
+		$AnimationPlayer.set_current_animation("Attack"+str(Attack_number))
+		velocity.y = 0
+		velocity.x = 0
+		#z_index = 10
+	
+	if velocity.x < 0:
+		$"Edwin Knight".set_flip_h(true)
+	elif velocity.x > 0:
+		$"Edwin Knight".set_flip_h(false)
+	
+	if is_on_floor():        #GroundState
+		wall_jumping = false
+		air_time = 0                    
+		if DirectionRunning == 0 and !Attacking:
+				$AnimationPlayer.set_current_animation("Idle")
+		elif DirectionRunning != 0 and !Attacking:
+				$AnimationPlayer.set_current_animation("Run")
+		if Input.is_action_just_pressed("Player1_Up"):
+			jump()
+		
+	elif !is_on_floor():                         #AirState
+		air_time += delta
+		if air_time <= 0.11 and Input.is_action_just_pressed("Player1_Up"):
+			jump()
+		
+		if DirectionRunning != 0 and raycast_active() and air_time > 0.28:
+			wall_jumping = false
+			$AnimationPlayer.set_current_animation("Wall_Jump")
+			Friction = 0.5
+			velocity.y = 0
+			if Input.is_action_just_pressed("Player1_Up"):
+				#===================================WALL_GRAB MODULE==============================================================
+				if !wall_jumping:
+					invert_ = DirectionRunning * -1
+				air_time = 0
+				wall_jumping = true
+				jump()
+		else:
+			Friction = 1
+			if velocity.y < 0:
+				$AnimationPlayer.set_current_animation("Jump")
+				
+			elif velocity.y > 0:
+				$AnimationPlayer.set_current_animation("Fall")
+		#===========================================WALL_GRAB MODULE==============================================================
+		
+		
+		
+	if wall_jumping and !Attacking:
+		velocity.x = WalkingSpeed * invert_
+	elif !Attacking :
+		velocity.x = WalkingSpeed * DirectionRunning
+	
+	if !Attacking :
+		velocity.y += get_gravity() * Friction * delta
+	velocity = move_and_slide(velocity, Vector2.UP)
+	
+	if air_time > 0.5:
+		wall_jumping = false
+		
+	if position.x > 690 :
+		position.x = -10
+		#print($"YSort/Edwin Knight".position.x)
+		print("okay")
+
+
+#====================================================JUMP MODULE=================================================================
+func get_gravity() -> float:
+	return jump_gravity if velocity.y < 0.0 else fall_gravity
+
+
+func jump():
+	velocity.y = jump_velocity 
+
+
+
+#====================================================JUMP MODULE=================================================================
+#====================================================WALLJUMP MODULE=============================================================
+func raycast_active():
+	
+	return ($LeftCast.is_colliding() or $RightCast.is_colliding())
+#====================================================WALLJUMP MODULE=============================================================
+#====================================================ATTACK MODULE===============================================================
+var Attacking = false
+var Attack_number = 1
+func _input(_event):
+	
+	if Attacking == false:
+		if Input.is_action_pressed("Player1_Attack") and ( is_on_floor() or air_time > 0.08):
+			Attacking = true
+			if Attack_number <=2:
+				Attack_number += 1
+			else:
+				Attack_number = 1
+	
+	pass
+
+
+
+
+
+#This is a signal from the AnimationPlayer
+func _on_AnimationPlayer_animation_finished(anim_name):
+	if anim_name == "Attack"+str(Attack_number):
+		Attacking = false
+		z_index = 0
+#====================================================ATTACK MODULE===============================================================
